@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useTransition } from "react";
 import {
   Dialog,
   DialogContent,
@@ -12,6 +12,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { formatPoints, formatCPF } from "@/lib/utils";
+import {
+  addManualTransaction,
+  getCustomerTransactions,
+} from "@/actions/transactions";
 import { Plus, Minus, Loader2, CheckCircle, XCircle } from "lucide-react";
 
 interface Customer {
@@ -28,7 +32,7 @@ interface Transaction {
   type: "CREDIT" | "DEBIT";
   points: number;
   description: string | null;
-  createdAt: string;
+  createdAt: Date;
   trip: { reservationId: string } | null;
 }
 
@@ -53,19 +57,16 @@ export function PointsModal({
     success: boolean;
     message: string;
   } | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   useEffect(() => {
     if (customer && open) {
       setIsLoadingHistory(true);
-      fetch(`/api/customers/${customer.id}/transactions`)
-        .then((res) => res.json())
-        .then((data) => {
-          setTransactions(data);
-          setIsLoadingHistory(false);
-        })
-        .catch(() => setIsLoadingHistory(false));
+      getCustomerTransactions(customer.id).then((data) => {
+        setTransactions(data as Transaction[]);
+        setIsLoadingHistory(false);
+      });
       // Reset form
       setType("CREDIT");
       setPoints("");
@@ -74,39 +75,28 @@ export function PointsModal({
     }
   }, [customer, open]);
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!customer || !points || !description) return;
 
-    setIsSubmitting(true);
-    try {
-      const response = await fetch("/api/transactions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customerId: customer.id,
-          type,
-          points: parseInt(points, 10),
-          description,
-        }),
+    startTransition(async () => {
+      const res = await addManualTransaction({
+        customerId: customer.id,
+        type,
+        points: parseInt(points, 10),
+        description,
       });
 
-      const res = await response.json();
       setResult(res);
 
       if (res.success) {
         setPoints("");
         setDescription("");
         // Refresh transactions
-        const txResponse = await fetch(`/api/customers/${customer.id}/transactions`);
-        const updated = await txResponse.json();
-        setTransactions(updated);
+        const updated = await getCustomerTransactions(customer.id);
+        setTransactions(updated as Transaction[]);
         onSuccess();
       }
-    } catch {
-      setResult({ success: false, message: "Erro ao processar transacao" });
-    } finally {
-      setIsSubmitting(false);
-    }
+    });
   };
 
   if (!customer) return null;
@@ -175,10 +165,10 @@ export function PointsModal({
           {/* Submit Button */}
           <Button
             onClick={handleSubmit}
-            disabled={isSubmitting || !points || !description}
+            disabled={isPending || !points || !description}
             className="w-full"
           >
-            {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            {isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             {type === "CREDIT" ? "Adicionar Pontos" : "Remover Pontos"}
           </Button>
 

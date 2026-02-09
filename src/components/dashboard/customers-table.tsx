@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import {
   Table,
   TableBody,
@@ -12,6 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { formatCPF, formatPoints } from "@/lib/utils";
+import { getCustomers } from "@/actions/import-data";
 import { PointsModal } from "./points-modal";
 import { Search } from "lucide-react";
 
@@ -26,29 +27,23 @@ interface Customer {
 
 interface CustomersTableProps {
   initialCustomers: Customer[];
-  onRefresh?: () => void;
 }
 
-export function CustomersTable({ initialCustomers, onRefresh }: CustomersTableProps) {
+export function CustomersTable({ initialCustomers }: CustomersTableProps) {
   const [customers, setCustomers] = useState(initialCustomers);
   const [search, setSearch] = useState("");
-  const [isSearching, setIsSearching] = useState(false);
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
+    null
+  );
   const [modalOpen, setModalOpen] = useState(false);
 
-  const handleSearch = async (value: string) => {
+  const handleSearch = (value: string) => {
     setSearch(value);
-    setIsSearching(true);
-    try {
-      const params = value ? `?search=${encodeURIComponent(value)}` : "";
-      const response = await fetch(`/api/customers${params}`);
-      const results = await response.json();
-      setCustomers(results);
-    } catch (error) {
-      console.error("Search error:", error);
-    } finally {
-      setIsSearching(false);
-    }
+    startTransition(async () => {
+      const results = await getCustomers(value || undefined);
+      setCustomers(results as Customer[]);
+    });
   };
 
   const handleRowClick = (customer: Customer) => {
@@ -56,20 +51,19 @@ export function CustomersTable({ initialCustomers, onRefresh }: CustomersTablePr
     setModalOpen(true);
   };
 
-  const handleSuccess = async () => {
-    try {
-      const params = search ? `?search=${encodeURIComponent(search)}` : "";
-      const response = await fetch(`/api/customers${params}`);
-      const results = await response.json();
-      setCustomers(results);
+  const handleSuccess = () => {
+    // Refresh customer list after transaction
+    startTransition(async () => {
+      const results = await getCustomers(search || undefined);
+      setCustomers(results as Customer[]);
+      // Update selected customer if still open
       if (selectedCustomer) {
-        const updated = results.find((c: Customer) => c.id === selectedCustomer.id);
-        if (updated) setSelectedCustomer(updated);
+        const updated = results.find((c) => c.id === selectedCustomer.id);
+        if (updated) {
+          setSelectedCustomer(updated as Customer);
+        }
       }
-      onRefresh?.();
-    } catch (error) {
-      console.error("Refresh error:", error);
-    }
+    });
   };
 
   return (
@@ -84,7 +78,7 @@ export function CustomersTable({ initialCustomers, onRefresh }: CustomersTablePr
             className="pl-9"
           />
         </div>
-        {isSearching && (
+        {isPending && (
           <span className="text-sm text-muted-foreground">Buscando...</span>
         )}
       </div>
@@ -125,7 +119,9 @@ export function CustomersTable({ initialCustomers, onRefresh }: CustomersTablePr
                     {customer.email || "-"}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Badge variant={customer.totalPoints > 0 ? "default" : "secondary"}>
+                    <Badge
+                      variant={customer.totalPoints > 0 ? "default" : "secondary"}
+                    >
                       {formatPoints(customer.totalPoints)} pts
                     </Badge>
                   </TableCell>

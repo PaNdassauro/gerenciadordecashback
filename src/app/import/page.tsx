@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -12,6 +11,8 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { importData, type ImportResult } from "@/actions/import-data";
+import { importExcelFile } from "@/actions/import-excel";
 import {
   Upload,
   CheckCircle,
@@ -22,19 +23,7 @@ import {
   Download,
   Loader2,
 } from "lucide-react";
-
-interface ImportResult {
-  success: boolean;
-  message: string;
-  stats?: {
-    customersCreated: number;
-    customersUpdated: number;
-    tripsCreated: number;
-    transactionsCreated: number;
-    totalPointsAdded: number;
-  };
-  errors?: string[];
-}
+import Link from "next/link";
 
 const exampleJson = `{
   "customers": [
@@ -73,12 +62,7 @@ export default function ImportPage() {
 
     try {
       const data = JSON.parse(jsonInput);
-      const response = await fetch("/api/import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      const importResult = await response.json();
+      const importResult = await importData(data);
       setResult(importResult);
     } catch {
       setResult({
@@ -100,11 +84,7 @@ export default function ImportPage() {
     try {
       const formData = new FormData();
       formData.append("file", selectedFile);
-      const response = await fetch("/api/import/excel", {
-        method: "POST",
-        body: formData,
-      });
-      const importResult = await response.json();
+      const importResult = await importExcelFile(formData);
       setResult(importResult);
     } catch {
       setResult({
@@ -133,7 +113,7 @@ export default function ImportPage() {
   return (
     <div className="container mx-auto py-8 px-4 space-y-6 max-w-4xl">
       <div className="flex items-center gap-4">
-        <Link to="/dashboard">
+        <Link href="/dashboard">
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-4 w-4" />
           </Button>
