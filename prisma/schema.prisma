@@ -1,0 +1,71 @@
+// Travelback Manager - Schema do Banco de Dados
+// Prisma ORM + PostgreSQL (Supabase)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Customer {
+  id           String        @id @default(cuid())
+  name         String
+  email        String?
+  phone        String?
+  cpf          String        @unique
+  totalPoints  Int           @default(0)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  trips        Trip[]
+  transactions Transaction[]
+
+  @@map("customers")
+}
+
+model Trip {
+  id              String        @id @default(cuid())
+  reservationId   String        @unique
+  totalValue      Decimal       @db.Decimal(10, 2)
+  returnDate      DateTime
+  status          TripStatus    @default(PENDING)
+  cashbackPercent Decimal       @db.Decimal(5, 2)
+  customerId      String
+  customer        Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  transactions    Transaction[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([customerId])
+  @@index([returnDate])
+  @@map("trips")
+}
+
+model Transaction {
+  id          String          @id @default(cuid())
+  type        TransactionType
+  points      Int
+  description String?
+  customerId  String
+  customer    Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  tripId      String?
+  trip        Trip?           @relation(fields: [tripId], references: [id], onDelete: SetNull)
+  createdAt   DateTime        @default(now())
+
+  @@index([customerId])
+  @@index([tripId])
+  @@map("transactions")
+}
+
+enum TripStatus {
+  PENDING
+  COMPLETED
+}
+
+enum TransactionType {
+  CREDIT
+  DEBIT
+}
