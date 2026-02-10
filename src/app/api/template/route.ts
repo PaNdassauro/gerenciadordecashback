@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+export const maxDuration = 300;
 export async function GET() {
   const XLSX = await import("xlsx");
   const workbook = XLSX.utils.book_new();

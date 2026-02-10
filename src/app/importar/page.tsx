@@ -1,6 +1,7 @@
 "use client";
 
 export const dynamic = "force-static";
+export const maxDuration = 300;
 
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
