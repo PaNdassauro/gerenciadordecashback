@@ -22,7 +22,7 @@ export default async function DashboardPage() {
             Gerencie o cashback dos clientes da agencia
           </p>
         </div>
-        <Link href="/import">
+        <Link href="/importar">
           <Button>
             <Upload className="h-4 w-4 mr-2" />
             Importar Dados

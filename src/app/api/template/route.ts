@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import * as XLSX from "xlsx";
-
 export async function GET() {
+  const XLSX = await import("xlsx");
   const workbook = XLSX.utils.book_new();
 
   // Single sheet with all data

@@ -1,7 +1,7 @@
 "use server";
 
 import { importData, type ImportResult } from "./import-data";
-import * as XLSX from "xlsx";
+// import * as XLSX from "xlsx"; // Moved to dynamic import inside functions
 
 // Formato padrao (modelo)
 interface StandardRow {
@@ -44,17 +44,18 @@ function isMondeFormat(headers: string[]): boolean {
   );
 }
 
-function parseExcelDate(value: number | string | undefined): string {
+async function parseExcelDate(value: number | string | undefined): Promise<string> {
   if (!value) return new Date().toISOString();
 
   if (typeof value === "number") {
+    const XLSX = await import("xlsx");
     const date = XLSX.SSF.parse_date_code(value);
     return new Date(date.y, date.m - 1, date.d).toISOString();
   }
   return new Date(value).toISOString();
 }
 
-function processMondeData(rawData: MondeRow[]): {
+async function processMondeData(rawData: MondeRow[]): Promise<{
   customers: Array<{ name: string; cpf: string; email?: string; phone?: string }>;
   trips: Array<{
     reservationId: string;
@@ -65,7 +66,7 @@ function processMondeData(rawData: MondeRow[]): {
     cashbackPercent: number;
   }>;
   stats: { filtered: number; noEmail: number };
-} {
+}> {
   const customersMap = new Map<string, {
     name: string;
     cpf: string;
@@ -153,7 +154,7 @@ function processMondeData(rawData: MondeRow[]): {
         reservationId: vendaId,
         customerCpf: cpf,
         totalValue: row.Receitas,
-        returnDate: parseExcelDate(row["Data Fim"]),
+        returnDate: await parseExcelDate(row["Data Fim"]),
         status: "COMPLETED",
         cashbackPercent: CASHBACK_PERCENT,
       });
@@ -167,7 +168,7 @@ function processMondeData(rawData: MondeRow[]): {
   };
 }
 
-function processStandardData(rawData: StandardRow[]): {
+async function processStandardData(rawData: StandardRow[]): Promise<{
   customers: Array<{ name: string; cpf: string; email?: string; phone?: string }>;
   trips: Array<{
     reservationId: string;
@@ -177,7 +178,7 @@ function processStandardData(rawData: StandardRow[]): {
     status: "PENDING" | "COMPLETED";
     cashbackPercent: number;
   }>;
-} {
+}> {
   const customersMap = new Map<string, {
     name: string;
     cpf: string;
@@ -212,7 +213,7 @@ function processStandardData(rawData: StandardRow[]): {
         reservationId: String(row.reservationId).trim(),
         customerCpf: cpf,
         totalValue: Number(row.totalValue) || 0,
-        returnDate: parseExcelDate(row.returnDate),
+        returnDate: await parseExcelDate(row.returnDate),
         status: String(row.status || "").toUpperCase() === "COMPLETED"
           ? "COMPLETED"
           : "PENDING",
@@ -239,6 +240,7 @@ export async function importExcelFile(formData: FormData): Promise<ImportResult>
     }
 
     const arrayBuffer = await file.arrayBuffer();
+    const XLSX = await import("xlsx");
     const workbook = XLSX.read(arrayBuffer, { type: "array" });
 
     const sheetName = workbook.SheetNames[0];
@@ -268,14 +270,14 @@ export async function importExcelFile(formData: FormData): Promise<ImportResult>
     if (isMondeFormat(headers)) {
       // Formato Monde detectado
       const rawData = XLSX.utils.sheet_to_json<MondeRow>(sheet);
-      const result = processMondeData(rawData);
+      const result = await processMondeData(rawData);
       customers = result.customers;
       trips = result.trips;
       extraMessage = ` (Monde: ${result.stats.filtered} linhas filtradas, ${result.stats.noEmail} sem email)`;
     } else {
       // Formato padrão
       const rawData = XLSX.utils.sheet_to_json<StandardRow>(sheet);
-      const result = processStandardData(rawData);
+      const result = await processStandardData(rawData);
       customers = result.customers;
       trips = result.trips;
     }
