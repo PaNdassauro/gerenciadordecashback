@@ -43,3 +43,5 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+vendas_por_produto2023-2026.xlsx
+.md
