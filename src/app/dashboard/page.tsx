@@ -2,6 +2,7 @@ import { StatsCards } from "@/components/dashboard/stats-cards";
 import { CustomersTable } from "@/components/dashboard/customers-table";
 import { getDashboardStats, getCustomers } from "@/actions/import-data";
 import { Button } from "@/components/ui/button";
+import { LogoutButton } from "@/components/logout-button";
 import { Upload } from "lucide-react";
 import Link from "next/link";
 
@@ -22,12 +23,15 @@ export default async function DashboardPage() {
             Gerencie o cashback dos clientes da agencia
           </p>
         </div>
-        <Link href="/importar">
-          <Button>
-            <Upload className="h-4 w-4 mr-2" />
-            Importar Dados
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/importar">
+            <Button>
+              <Upload className="h-4 w-4 mr-2" />
+              Importar Dados
+            </Button>
+          </Link>
+          <LogoutButton />
+        </div>
       </div>
 
       <StatsCards
