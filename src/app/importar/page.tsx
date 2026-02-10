@@ -15,7 +15,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { importData, type ImportResult } from "@/actions/import-data";
-import { importExcelFile } from "@/actions/import-excel";
 import {
   Upload,
   CheckCircle,
@@ -27,6 +26,11 @@ import {
   Loader2,
 } from "lucide-react";
 import Link from "next/link";
+import {
+  isMondeFormat,
+  processMondeData,
+  processStandardData,
+} from "@/lib/import-utils";
 
 const exampleJson = `{
   "customers": [
@@ -51,30 +55,84 @@ const exampleJson = `{
 
 type ImportMode = "json" | "excel";
 
+const CHUNK_SIZE = 100;
+
 export default function ImportPage() {
   const [mode, setMode] = useState<ImportMode>("excel");
   const [jsonInput, setJsonInput] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [statusText, setStatusText] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImportChunks = async (customers: any[], trips: any[]) => {
+    const totalChunks = Math.ceil(trips.length / CHUNK_SIZE);
+    let stats = {
+      customersCreated: 0,
+      customersUpdated: 0,
+      tripsCreated: 0,
+      transactionsCreated: 0,
+      totalPointsAdded: 0,
+    };
+
+    // First, import all customers in one or more batches
+    // (Customers are usually fewer than trips, but let's chunk them too)
+    const customerChunks = Math.ceil(customers.length / CHUNK_SIZE);
+    setStatusText("Importando clientes...");
+    for (let i = 0; i < customerChunks; i++) {
+      const chunk = customers.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+      const res = await importData({ customers: chunk, trips: [] });
+      if (!res.success) throw new Error(res.message);
+      if (res.stats) {
+        stats.customersCreated += res.stats.customersCreated;
+        stats.customersUpdated += res.stats.customersUpdated;
+      }
+      setProgress(Math.round(((i + 1) / (customerChunks + totalChunks)) * 100));
+    }
+
+    // Then, import trips in chunks
+    for (let i = 0; i < totalChunks; i++) {
+      setStatusText(`Importando viagens: lote ${i + 1} de ${totalChunks}...`);
+      const chunk = trips.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+      const res = await importData({ customers: [], trips: chunk });
+      if (!res.success) throw new Error(res.message);
+      if (res.stats) {
+        stats.tripsCreated += res.stats.tripsCreated;
+        stats.transactionsCreated += res.stats.transactionsCreated;
+        stats.totalPointsAdded += res.stats.totalPointsAdded;
+      }
+      setProgress(
+        Math.round(((customerChunks + i + 1) / (customerChunks + totalChunks)) * 100)
+      );
+    }
+
+    return stats;
+  };
 
   const handleJsonImport = async () => {
     setLoading(true);
     setResult(null);
+    setProgress(0);
 
     try {
       const data = JSON.parse(jsonInput);
-      const importResult = await importData(data);
-      setResult(importResult);
-    } catch {
+      const stats = await handleImportChunks(data.customers || [], data.trips || []);
+      setResult({
+        success: true,
+        message: "Importação concluída com sucesso",
+        stats,
+      });
+    } catch (err: any) {
       setResult({
         success: false,
-        message: "JSON invalido",
-        errors: ["Verifique a formatacao do JSON"],
+        message: "Erro na importação",
+        errors: [err.message || "Verifique a formatacao do JSON"],
       });
     } finally {
       setLoading(false);
+      setStatusText("");
     }
   };
 
@@ -83,20 +141,51 @@ export default function ImportPage() {
 
     setLoading(true);
     setResult(null);
+    setProgress(0);
+    setStatusText("Lendo arquivo...");
 
     try {
-      const formData = new FormData();
-      formData.append("file", selectedFile);
-      const importResult = await importExcelFile(formData);
-      setResult(importResult);
-    } catch {
+      const XLSX = await import("xlsx");
+      const buffer = await selectedFile.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array" });
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+
+      if (!sheet) throw new Error("Planilha vazia");
+
+      const headers = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1 })[0] || [];
+      let parsedData;
+
+      if (isMondeFormat(headers)) {
+        setStatusText("Processando formato Monde...");
+        const rawData = XLSX.utils.sheet_to_json<any>(sheet);
+        parsedData = processMondeData(rawData, XLSX.SSF);
+      } else {
+        setStatusText("Processando formato padrão...");
+        const rawData = XLSX.utils.sheet_to_json<any>(sheet);
+        parsedData = processStandardData(rawData, XLSX.SSF);
+      }
+
+      if (parsedData.customers.length === 0 && parsedData.trips.length === 0) {
+        throw new Error("Nenhum dado válido encontrado");
+      }
+
+      const stats = await handleImportChunks(parsedData.customers, parsedData.trips);
+      setResult({
+        success: true,
+        message: "Importação concluída com sucesso",
+        stats,
+      });
+    } catch (err: any) {
+      console.error(err);
       setResult({
         success: false,
         message: "Erro ao processar arquivo",
-        errors: ["Verifique se o arquivo esta no formato correto"],
+        errors: [err.message || "Verifique se o arquivo esta no formato correto"],
       });
     } finally {
       setLoading(false);
+      setStatusText("");
     }
   };
 
@@ -296,16 +385,15 @@ export default function ImportPage() {
                   Processando importacao...
                 </CardTitle>
                 <CardDescription>
-                  Isso pode levar alguns segundos
+                  {statusText || "Isso pode levar alguns minutos para arquivos grandes"}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <Progress indeterminate />
-                <div className="text-sm text-muted-foreground space-y-1">
-                  <p>Lendo planilha...</p>
-                  <p>Validando dados...</p>
-                  <p>Criando clientes e viagens...</p>
-                  <p>Calculando pontos...</p>
+                <Progress value={progress} />
+                <p className="text-center text-sm font-medium">{progress}% concluído</p>
+                <div className="text-sm text-muted-foreground space-y-1 text-center">
+                  <p>Fragmentando dados para evitar timeouts...</p>
+                  <p>Mantendo sua sessão ativa...</p>
                 </div>
               </CardContent>
             </Card>
