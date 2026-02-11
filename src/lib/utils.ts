@@ -13,3 +13,10 @@ export function formatCPF(cpf: string): string {
 export function formatPoints(points: number): string {
   return new Intl.NumberFormat("pt-BR").format(points);
 }
+
+export function formatCurrency(value: number): string {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(value);
+}

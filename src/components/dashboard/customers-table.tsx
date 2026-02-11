@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { formatCPF, formatPoints } from "@/lib/utils";
+import { formatCPF, formatPoints, formatCurrency } from "@/lib/utils";
 import { getCustomers } from "@/actions/import-data";
 import { PointsModal } from "./points-modal";
 import { Search } from "lucide-react";
@@ -23,6 +23,7 @@ interface Customer {
   phone: string | null;
   cpf: string;
   totalPoints: number;
+  totalRevenue: number;
 }
 
 interface CustomersTableProps {
@@ -91,13 +92,15 @@ export function CustomersTable({ initialCustomers }: CustomersTableProps) {
               <TableHead>CPF</TableHead>
               <TableHead>Telefone</TableHead>
               <TableHead>Email</TableHead>
+              <TableHead className="text-right w-32">Receita Total</TableHead>
+              <TableHead className="text-right w-28">1% Receita</TableHead>
               <TableHead className="text-right">Saldo de Pontos</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {customers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center">
+                <TableCell colSpan={7} className="h-24 text-center">
                   Nenhum cliente encontrado.
                 </TableCell>
               </TableRow>
@@ -117,6 +120,12 @@ export function CustomersTable({ initialCustomers }: CustomersTableProps) {
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {customer.email || "-"}
+                  </TableCell>
+                  <TableCell className="text-right font-medium whitespace-nowrap">
+                    {formatCurrency(customer.totalRevenue)}
+                  </TableCell>
+                  <TableCell className="text-right text-green-600 font-medium whitespace-nowrap">
+                    {formatCurrency(customer.totalRevenue * 0.01)}
                   </TableCell>
                   <TableCell className="text-right">
                     <Badge

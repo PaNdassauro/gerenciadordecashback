@@ -191,11 +191,30 @@ export async function getCustomers(search?: string) {
       }
     : {};
 
-  return prisma.customer.findMany({
+  const customers = await prisma.customer.findMany({
     where,
     orderBy: {
       totalPoints: "desc",
     },
     take: 50,
+    include: {
+      trips: {
+        select: {
+          totalValue: true,
+        },
+      },
+    },
+  });
+
+  return customers.map((customer) => {
+    const totalRevenue = customer.trips.reduce(
+      (sum, trip) => sum + Number(trip.totalValue),
+      0
+    );
+    const { trips, ...customerData } = customer;
+    return {
+      ...customerData,
+      totalRevenue,
+    };
   });
 }
