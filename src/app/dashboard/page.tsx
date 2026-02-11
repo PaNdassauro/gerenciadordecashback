@@ -3,7 +3,7 @@ import { CustomersTable } from "@/components/dashboard/customers-table";
 import { getDashboardStats, getCustomers } from "@/actions/import-data";
 import { Button } from "@/components/ui/button";
 import { LogoutButton } from "@/components/logout-button";
-import { Upload } from "lucide-react";
+import { Upload, FileText } from "lucide-react";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +24,12 @@ export default async function DashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Link href="/extrato">
+            <Button variant="outline">
+              <FileText className="h-4 w-4 mr-2" />
+              Extrato
+            </Button>
+          </Link>
           <Link href="/importar">
             <Button>
               <Upload className="h-4 w-4 mr-2" />
@@ -38,6 +44,7 @@ export default async function DashboardPage() {
         totalPoints={stats.totalPoints}
         activeCustomers={stats.activeCustomers}
         completedTrips={stats.completedTrips}
+        totalRevenue1Percent={stats.totalRevenue1Percent}
       />
 
       <div className="space-y-4">

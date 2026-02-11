@@ -153,30 +153,39 @@ export async function importData(data: unknown): Promise<ImportResult> {
 }
 
 export async function getDashboardStats() {
-  const [totalPoints, activeCustomers, completedTrips] = await Promise.all([
-    prisma.customer.aggregate({
-      _sum: {
-        totalPoints: true,
-      },
-    }),
-    prisma.customer.count({
-      where: {
-        totalPoints: {
-          gt: 0,
+  const [totalPoints, activeCustomers, completedTrips, totalRevenueResult] =
+    await Promise.all([
+      prisma.customer.aggregate({
+        _sum: {
+          totalPoints: true,
         },
-      },
-    }),
-    prisma.trip.count({
-      where: {
-        status: "COMPLETED",
-      },
-    }),
-  ]);
+      }),
+      prisma.customer.count({
+        where: {
+          totalPoints: {
+            gt: 0,
+          },
+        },
+      }),
+      prisma.trip.count({
+        where: {
+          status: "COMPLETED",
+        },
+      }),
+      prisma.trip.aggregate({
+        _sum: {
+          totalValue: true,
+        },
+      }),
+    ]);
+
+  const totalRevenue = Number(totalRevenueResult._sum.totalValue ?? 0);
 
   return {
     totalPoints: totalPoints._sum.totalPoints ?? 0,
     activeCustomers,
     completedTrips,
+    totalRevenue1Percent: totalRevenue * 0.01,
   };
 }
 

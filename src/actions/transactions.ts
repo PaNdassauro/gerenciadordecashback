@@ -2,9 +2,15 @@
 
 import { prisma } from "@/lib/prisma";
 import { ManualTransactionSchema } from "@/lib/validations/transaction";
+import {
+  GetTransactionsFilterSchema,
+  type GetTransactionsResult,
+  type TransactionWithCustomer,
+} from "@/lib/validations/extrato";
 import { revalidatePath } from "next/cache";
+import { Prisma } from "@prisma/client";
 
-export interface TransactionResult {
+interface TransactionResult {
   success: boolean;
   message: string;
   newBalance?: number;
@@ -111,5 +117,79 @@ export async function getCustomerTransactions(customerId: string, limit = 10) {
         },
       },
     },
+  });
+}
+
+export async function getTransactions(
+  filters: unknown
+): Promise<GetTransactionsResult> {
+  const validation = GetTransactionsFilterSchema.safeParse(filters);
+
+  if (!validation.success) {
+    return { transactions: [], total: 0, page: 1, totalPages: 0 };
+  }
+
+  const { customerId, startDate, endDate, type, page, limit } = validation.data;
+
+  const where: Prisma.TransactionWhereInput = {};
+
+  if (customerId) {
+    where.customerId = customerId;
+  }
+
+  if (type) {
+    where.type = type;
+  }
+
+  if (startDate || endDate) {
+    where.createdAt = {};
+    if (startDate) {
+      where.createdAt.gte = new Date(startDate);
+    }
+    if (endDate) {
+      where.createdAt.lte = new Date(endDate);
+    }
+  }
+
+  const [transactions, total] = await Promise.all([
+    prisma.transaction.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * limit,
+      take: limit,
+      include: {
+        customer: {
+          select: {
+            id: true,
+            name: true,
+            cpf: true,
+          },
+        },
+        trip: {
+          select: {
+            reservationId: true,
+          },
+        },
+      },
+    }),
+    prisma.transaction.count({ where }),
+  ]);
+
+  return {
+    transactions: transactions as TransactionWithCustomer[],
+    total,
+    page,
+    totalPages: Math.ceil(total / limit),
+  };
+}
+
+export async function getCustomersForSelect() {
+  return prisma.customer.findMany({
+    select: {
+      id: true,
+      name: true,
+      cpf: true,
+    },
+    orderBy: { name: "asc" },
   });
 }
